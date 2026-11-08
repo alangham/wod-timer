@@ -607,11 +607,16 @@ function conceal(button, concealed) {
   button.disabled = concealed;
 }
 
-// The mode row holds +1 and -1 for AMRAP, and Done for For Time. It keeps its
+// The mode row holds -1 and +1 for AMRAP, and Done for For Time. It keeps its
 // space in every state, so the clock does not change size when they appear.
-// Done is alone in that row, so a quick second tap on Done hits no button.
-// Pause and Resume share the left half of the bottom row, so a quick second
-// tap on Pause hits Resume.
+// When the workout ends, the mode row is empty, so a late tap on Done, -1 or +1
+// hits no button.
+// The bottom row in each state:
+//   Idle: Menu | Start
+//   Prep and Running: Pause
+//   Paused: Reset | Resume
+//   Finished: Menu | Reset
+// A quick second tap on the center of Pause hits Resume.
 function showControls() {
   const isAmrap = workout.mode === MODE.AMRAP;
   const isForTime = workout.mode === MODE.FOR_TIME;
@@ -619,6 +624,7 @@ function showControls() {
   pauseButton.hidden = !(isCounting() || state === STATE.PAUSED);
   pauseButton.textContent = state === STATE.PAUSED ? 'Resume' : 'Pause';
   resetButton.hidden = !(state === STATE.PAUSED || state === STATE.FINISHED);
+  resetButton.classList.toggle('wide', state === STATE.FINISHED);
   menuButton.hidden = !(state === STATE.IDLE || state === STATE.FINISHED);
 
   modeRow.hidden = !(isAmrap || isForTime);

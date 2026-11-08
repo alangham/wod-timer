@@ -346,23 +346,30 @@ button.primary:active:not(:disabled) {
   gap: 12px;
 }
 
+/* Each row is full. In the bottom row, Menu and Reset in Paused take the narrow
+   left part. Start, Resume and Reset in Finished take the wide right part.
+   Pause is alone in the bottom row, so it takes the full row, and its center
+   is over Resume. */
 .control-row button {
   flex: 1 1 0;
+  min-width: 0;
+  padding: 0 8px;
+  white-space: nowrap;
   font-size: clamp(26px, 6vmin, 48px);
 }
 
-/* Pause and Resume stay in the left half. Reset appears in the right half. */
-#pause {
-  flex: 0 0 calc(50% - 6px);
-}
-
-#menu-button {
-  flex: 0 1 30%;
-}
-
-/* +1 is the largest button on the AMRAP timer screen. */
-#plus {
+.control-row button.wide {
   flex-grow: 2;
+}
+
+#minus {
+  flex: 0 0 22%;
+}
+
+/* +1 is the largest button on the AMRAP timer screen. Pause is wider than +1,
+   so +1 must be taller than Pause by more than the width ratio. */
+#plus {
+  min-height: 100px;
 }
 
 /* A concealed button keeps its space, so the clock does not move. */
@@ -408,6 +415,6 @@ button.primary:active:not(:disabled) {
   }
 
   #plus {
-    min-height: 120px;
+    min-height: 144px;
   }
 }
