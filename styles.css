@@ -3,7 +3,14 @@
   --red-unlit: #2b0606;
   --green-lit: #1aff4f;
   --green-unlit: #062b0f;
-  --side: min(18vw, 34vh);
+  --accent: #ff1a1a;
+  --accent-dark: #b30000;
+  --error: #ff7070;
+  --panel: #1c1c1c;
+  --panel-active: #3a3a3a;
+  --border: #5a5a5a;
+  --muted: #bdbdbd;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 
 * {
@@ -15,6 +22,8 @@ body {
   margin: 0;
   height: 100%;
   background: #000;
+  color: #fff;
+  font-family: var(--font);
   overflow: hidden;
   overscroll-behavior: none;
   touch-action: manipulation;
@@ -28,7 +37,7 @@ body {
   display: none !important;
 }
 
-#app {
+.screen {
   position: fixed;
   inset: 0;
   display: flex;
@@ -42,14 +51,230 @@ body {
   background: #000;
 }
 
-#app[data-tone="red"] {
+.screen-title {
+  margin: 0;
+  color: var(--accent);
+  font-size: clamp(22px, 4.5vmin, 36px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+button {
+  min-height: 72px;
+  padding: 0 16px;
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  color: #fff;
+  font-family: var(--font);
+  font-size: clamp(22px, 5vmin, 40px);
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button:active:not(:disabled) {
+  background: var(--panel-active);
+}
+
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: #3d0000;
+}
+
+button.primary:active:not(:disabled) {
+  background: #5c0000;
+}
+
+/* ---------- Mode menu ---------- */
+
+.mode-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
+  gap: 12px;
+}
+
+.mode-grid button {
+  border-color: var(--accent);
+  font-size: clamp(24px, 6vmin, 48px);
+}
+
+/* ---------- Setup screen ---------- */
+
+.setup-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.setup-header button {
+  min-width: 120px;
+}
+
+.setup-fields {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 12px 4px 16px;
+}
+
+.setup-footer {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+}
+
+.setup-footer button {
+  flex: 1 1 0;
+}
+
+.field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.field-label {
+  flex: 0 0 100%;
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.field-hint {
+  flex: 0 0 100%;
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.field-error {
+  color: var(--error);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.time-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.colon {
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.setup input {
+  width: 2.4em;
+  min-height: 68px;
+  padding: 0 4px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.setup input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.setup input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.step-list {
+  flex: 0 0 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.step-number {
+  min-width: 1.6em;
+  color: var(--muted);
+  font-size: 22px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.type-switch {
+  display: inline-flex;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.type-switch button {
+  min-height: 64px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 0;
+  font-size: 22px;
+}
+
+.type-switch button[aria-pressed="true"] {
+  background: var(--accent-dark);
+}
+
+.step-row .remove {
+  min-height: 64px;
+  font-size: 20px;
+}
+
+.add-step {
+  flex: 0 0 100%;
+  font-size: 24px;
+}
+
+/* ---------- Timer screen ---------- */
+
+#timer[data-tone="red"] {
   --lit: var(--red-lit);
   --unlit: var(--red-unlit);
 }
 
-#app[data-tone="green"] {
+#timer[data-tone="green"] {
   --lit: var(--green-lit);
   --unlit: var(--green-unlit);
+}
+
+/* app.js sets --clock-aspect, --round-aspect and --side-scale for each workout. */
+#timer {
+  --side-base: min(18vw, 34vh);
+  --side: calc(var(--side-base) * var(--side-scale, 1));
 }
 
 /* Landscape is the primary layout: the clock on the left, the round on the right. */
@@ -81,18 +306,17 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--side) * 0.12);
+  gap: calc(var(--side-base) * 0.12);
 }
 
 .round {
   width: 100%;
-  aspect-ratio: 160 / 100;
+  aspect-ratio: var(--round-aspect, 1.6);
 }
 
 .rest {
   color: var(--lit);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: calc(var(--side) * 0.32);
+  font-size: calc(var(--side-base) * 0.32);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -113,36 +337,45 @@ body {
 .controls {
   flex: 0 0 auto;
   display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-button {
-  flex: 1 1 0;
-  min-height: 72px;
-  padding: 0 16px;
-  border: 2px solid #5a5a5a;
-  border-radius: 14px;
-  background: #1c1c1c;
-  color: #fff;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  font-size: clamp(26px, 6vmin, 48px);
-  font-weight: 700;
-  cursor: pointer;
-  touch-action: manipulation;
+.control-row {
+  display: flex;
+  gap: 12px;
 }
 
-/* Pause and Resume stay in the left half, and Reset appears in the right half.
-   A quick second tap on Pause then hits Resume, not Reset. */
+.control-row button {
+  flex: 1 1 0;
+  font-size: clamp(26px, 6vmin, 48px);
+}
+
+/* Pause and Resume stay in the left half. Reset appears in the right half. */
 #pause {
   flex: 0 0 calc(50% - 6px);
 }
 
-button:active {
-  background: #3a3a3a;
+#menu-button {
+  flex: 0 1 30%;
+}
+
+/* +1 is the largest button on the AMRAP timer screen. */
+#plus {
+  flex-grow: 2;
+}
+
+/* A concealed button keeps its space, so the clock does not move. */
+.concealed {
+  visibility: hidden;
 }
 
 /* Portrait: the width limits the clock, so the digits are smaller. */
 @media (orientation: portrait) {
+  .mode-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .display {
     flex-direction: column;
     justify-content: center;
@@ -153,7 +386,7 @@ button:active {
   .clock {
     flex: 0 0 auto;
     width: 100%;
-    aspect-ratio: 218 / 100;
+    aspect-ratio: var(--clock-aspect, 2.18);
   }
 
   .side {
@@ -163,14 +396,18 @@ button:active {
   }
 
   .round {
-    width: 34vw;
+    width: min(calc(34vw * var(--side-scale, 1)), 52vw);
   }
 
   .rest {
     font-size: 13vw;
   }
 
-  button {
+  .control-row button {
     min-height: 96px;
+  }
+
+  #plus {
+    min-height: 120px;
   }
 }

@@ -1,7 +1,19 @@
-// DOM, state machine, controls and drawing.
+// DOM, screens, state machine, controls and drawing.
 
-import { TYPE, buildBeepSchedule, getState, totalDurationMs } from './timeline.js';
+import {
+  MODE,
+  TYPE,
+  adjustRoundCount,
+  buildBeepSchedule,
+  buildSegments,
+  clockDigitCount,
+  defaultSettings,
+  getState,
+  totalDurationMs,
+  validateSettings,
+} from './timeline.js';
 import * as audio from './audio.js';
+import { loadSettings, saveSettings } from './settings.js';
 
 const STATE = Object.freeze({
   IDLE: 'Idle',
@@ -11,8 +23,39 @@ const STATE = Object.freeze({
   FINISHED: 'Finished',
 });
 
-const BEEPS = buildBeepSchedule();
-const TOTAL_MS = totalDurationMs();
+const SETUP_TITLES = {
+  [MODE.FOR_TIME]: 'For Time',
+  [MODE.AMRAP]: 'AMRAP',
+  [MODE.EMOM]: 'EMOM',
+  [MODE.TABATA]: 'Tabata',
+  [MODE.CUSTOM]: 'Custom intervals',
+};
+
+// The fields of each setup screen, in order.
+const SETUP_FIELDS = {
+  [MODE.FOR_TIME]: [
+    { key: 'capMs', kind: 'time', label: 'Time cap', hint: '0:00 means no cap.' },
+  ],
+  [MODE.AMRAP]: [
+    { key: 'timeMs', kind: 'time', label: 'Time' },
+  ],
+  [MODE.EMOM]: [
+    { key: 'intervalMs', kind: 'time', label: 'Interval' },
+    { key: 'rounds', kind: 'count', label: 'Rounds' },
+  ],
+  [MODE.TABATA]: [
+    { key: 'workMs', kind: 'time', label: 'Work' },
+    { key: 'restMs', kind: 'time', label: 'Rest' },
+    { key: 'rounds', kind: 'count', label: 'Rounds' },
+  ],
+  [MODE.CUSTOM]: [
+    { key: 'rounds', kind: 'count', label: 'Rounds' },
+    { key: 'steps', kind: 'steps', label: 'Steps' },
+  ],
+};
+
+const MAX_STEPS = 20;
+const NEW_STEP = { type: TYPE.WORK, durationMs: 60_000 };
 
 /* ---------- Seven-segment drawing ---------- */
 
@@ -24,8 +67,12 @@ const COLON_W = 14;
 const SLASH_W = 24;
 const HALF = 7; // Half the thickness of a segment.
 const TIP = 1.5; // Space between the tips of two segments.
+const ROUND_BASE_W = 160; // The width of the `1/3` round display.
+const MAX_SIDE_SCALE = 1.5;
 
+// A space is a digit with all segments unlit.
 const SEGMENTS_ON = {
+  ' ': '',
   0: 'abcdef',
   1: 'bc',
   2: 'abdeg',
@@ -99,103 +146,489 @@ function addDigit(svg, x) {
 }
 
 function setDigit(segments, character) {
-  const on = SEGMENTS_ON[character];
+  const on = SEGMENTS_ON[character] ?? '';
   for (const [letter, element] of Object.entries(segments)) {
     element.classList.toggle('on', on.includes(letter));
   }
 }
 
-// `M:SS`: three digits and a colon.
-function buildClock(host) {
-  const width = DIGIT_W * 3 + DIGIT_GAP * 3 + COLON_W;
-  const svg = svgElement('svg', {
-    viewBox: `0 0 ${width} ${DIGIT_H}`,
-    preserveAspectRatio: 'xMaxYMid meet',
-    'aria-hidden': 'true',
-  });
-
-  const minutes = addDigit(svg, 0);
-  const colonX = DIGIT_W + DIGIT_GAP;
-  for (const y of [28, 58]) {
-    svg.append(svgElement('rect', {
-      class: 'seg on', x: colonX, y, width: COLON_W, height: COLON_W,
-    }));
-  }
-  const tensX = colonX + COLON_W + DIGIT_GAP;
-  const tens = addDigit(svg, tensX);
-  const ones = addDigit(svg, tensX + DIGIT_W + DIGIT_GAP);
-
-  host.append(svg);
-  return [minutes, tens, ones];
+// Sets a row of digits from text, aligned to the right. A missing digit on
+// the left shows with all segments unlit.
+function setDigits(digits, text) {
+  const characters = text.padStart(digits.length, ' ');
+  digits.forEach((digit, index) => setDigit(digit, characters[index]));
 }
 
-// `1/3`: two digits and a slash.
-function buildRound(host) {
-  const width = DIGIT_W * 2 + DIGIT_GAP * 2 + SLASH_W;
+// `M:SS` with 3 digits, or `MM:SS` with 4 digits.
+function buildClock(host, digitCount, alignRight) {
+  const width = DIGIT_W * digitCount + DIGIT_GAP * digitCount + COLON_W;
   const svg = svgElement('svg', {
     viewBox: `0 0 ${width} ${DIGIT_H}`,
+    preserveAspectRatio: alignRight ? 'xMaxYMid meet' : 'xMidYMid meet',
     'aria-hidden': 'true',
   });
 
-  const current = addDigit(svg, 0);
-  const slashX = DIGIT_W + DIGIT_GAP;
-  svg.append(polygon([
-    [slashX, DIGIT_H], [slashX + 9, DIGIT_H],
-    [slashX + SLASH_W, 0], [slashX + SLASH_W - 9, 0],
-  ], 'seg on'));
-  const total = addDigit(svg, slashX + SLASH_W + DIGIT_GAP);
+  const digits = [];
+  let x = 0;
+  for (let index = 0; index < digitCount - 2; index += 1) {
+    digits.push(addDigit(svg, x));
+    x += DIGIT_W + DIGIT_GAP;
+  }
+  for (const y of [28, 58]) {
+    svg.append(svgElement('rect', {
+      class: 'seg on', x, y, width: COLON_W, height: COLON_W,
+    }));
+  }
+  x += COLON_W + DIGIT_GAP;
+  digits.push(addDigit(svg, x));
+  x += DIGIT_W + DIGIT_GAP;
+  digits.push(addDigit(svg, x));
 
-  host.append(svg);
-  return [current, total];
+  host.replaceChildren(svg);
+  return { digits, width };
+}
+
+// `r/R` when layout.total > 0, otherwise a plain count.
+function buildRound(host, layout) {
+  const svg = svgElement('svg', { 'aria-hidden': 'true' });
+  let x = 0;
+  const addDigits = (count) => {
+    const digits = [];
+    for (let index = 0; index < count; index += 1) {
+      digits.push(addDigit(svg, x));
+      x += DIGIT_W + DIGIT_GAP;
+    }
+    return digits;
+  };
+
+  const current = addDigits(layout.current);
+  let total = [];
+  if (layout.total > 0) {
+    svg.append(polygon([
+      [x, DIGIT_H], [x + 9, DIGIT_H],
+      [x + SLASH_W, 0], [x + SLASH_W - 9, 0],
+    ], 'seg on'));
+    x += SLASH_W + DIGIT_GAP;
+    total = addDigits(layout.total);
+  }
+
+  const width = x - DIGIT_GAP;
+  svg.setAttribute('viewBox', `0 0 ${width} ${DIGIT_H}`);
+  host.replaceChildren(svg);
+  return { current, total, width };
+}
+
+// The digit counts of the round display, or null if the mode shows no round.
+function roundLayout(mode, segments) {
+  if (mode === MODE.AMRAP) {
+    return { current: 3, total: 0 };
+  }
+  const totals = segments
+    .filter((segment) => segment.round !== null)
+    .map((segment) => segment.round.split('/')[1].length);
+  if (totals.length === 0) {
+    return null;
+  }
+  const digits = Math.max(...totals);
+  return { current: digits, total: digits };
 }
 
 /* ---------- Page elements ---------- */
 
-const appEl = document.getElementById('app');
+const menuScreen = document.getElementById('menu');
+const setupScreen = document.getElementById('setup');
+const timerScreen = document.getElementById('timer');
+
+const setupTitle = document.getElementById('setup-title');
+const setupFields = document.getElementById('setup-fields');
+const setupBackButton = document.getElementById('setup-back');
+const setupDefaultsButton = document.getElementById('setup-defaults');
+const setupStartButton = document.getElementById('setup-start');
+
 const clockEl = document.getElementById('clock');
+const sideEl = document.getElementById('side');
 const roundEl = document.getElementById('round');
 const restEl = document.getElementById('rest');
+const modeRow = document.getElementById('mode-row');
+const minusButton = document.getElementById('minus');
+const plusButton = document.getElementById('plus');
 const startButton = document.getElementById('start');
 const pauseButton = document.getElementById('pause');
 const resetButton = document.getElementById('reset');
+const doneButton = document.getElementById('done');
+const menuButton = document.getElementById('menu-button');
 
-const clockDigits = buildClock(clockEl);
-const roundDigits = buildRound(roundEl);
+function showScreen(screen) {
+  for (const element of [menuScreen, setupScreen, timerScreen]) {
+    element.hidden = element !== screen;
+  }
+}
 
+/* ---------- Setup screen ---------- */
+
+let setupMode = null;
+
+function element(tag, attributes = {}, text = '') {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(attributes)) {
+    node.setAttribute(key, value);
+  }
+  if (text) {
+    node.textContent = text;
+  }
+  return node;
+}
+
+function numberInput(label, maxLength) {
+  const input = element('input', {
+    type: 'text',
+    inputmode: 'numeric',
+    pattern: '[0-9]*',
+    maxlength: String(maxLength),
+    autocomplete: 'off',
+    enterkeyhint: 'done',
+    'aria-label': label,
+  });
+  input.addEventListener('focus', () => input.select());
+  return input;
+}
+
+function timeInput(label) {
+  const group = element('div', { class: 'time-input', role: 'group', 'aria-label': label });
+  const minutes = numberInput(`${label} minutes`, 2);
+  minutes.classList.add('minutes');
+  const seconds = numberInput(`${label} seconds`, 2);
+  seconds.classList.add('seconds');
+  group.append(minutes, element('span', { class: 'colon', 'aria-hidden': 'true' }, ':'), seconds);
+  return group;
+}
+
+function writeTime(container, ms) {
+  const totalSeconds = Math.round(ms / 1000);
+  container.querySelector('.minutes').value = String(Math.floor(totalSeconds / 60));
+  container.querySelector('.seconds').value = String(totalSeconds % 60).padStart(2, '0');
+}
+
+// An empty field counts as 0. Any other text that is not a whole number in
+// range gives NaN, which validation reports.
+function readWholeNumber(input, max) {
+  const text = input.value.trim();
+  if (text === '') {
+    return 0;
+  }
+  if (!/^\d+$/.test(text)) {
+    return Number.NaN;
+  }
+  const value = Number(text);
+  return value <= max ? value : Number.NaN;
+}
+
+function readTime(container) {
+  const minutes = readWholeNumber(container.querySelector('.minutes'), 99);
+  const seconds = readWholeNumber(container.querySelector('.seconds'), 59);
+  return (minutes * 60 + seconds) * 1000;
+}
+
+function readCount(input) {
+  const text = input.value.trim();
+  return /^\d+$/.test(text) ? Number(text) : Number.NaN;
+}
+
+function errorSlot() {
+  return element('span', { class: 'field-error', 'aria-live': 'polite' });
+}
+
+function setStepType(row, type) {
+  row.dataset.type = type;
+  for (const button of row.querySelectorAll('.type-switch button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.type === type));
+  }
+}
+
+function stepRow(step) {
+  const row = element('li', { class: 'step-row' });
+  const number = element('span', { class: 'step-number' });
+  const typeSwitch = element('div', { class: 'type-switch', role: 'group', 'aria-label': 'Step type' });
+  for (const type of [TYPE.WORK, TYPE.REST]) {
+    const button = element('button', { type: 'button', 'data-type': type }, type);
+    button.addEventListener('click', () => {
+      setStepType(row, type);
+      validateSetup();
+    });
+    typeSwitch.append(button);
+  }
+  const time = timeInput('Step time');
+  const remove = element('button', { type: 'button', class: 'remove' }, 'Remove');
+  remove.addEventListener('click', () => {
+    row.remove();
+    updateSteps();
+  });
+  row.append(number, typeSwitch, time, remove, errorSlot());
+  setStepType(row, step.type);
+  writeTime(time, step.durationMs);
+  return row;
+}
+
+function stepList() {
+  return setupFields.querySelector('.step-list');
+}
+
+// Numbers the steps, shows Remove and Add step as section 4 says, and checks
+// the settings again.
+function updateSteps() {
+  const rows = [...stepList().children];
+  rows.forEach((row, index) => {
+    row.querySelector('.step-number').textContent = String(index + 1);
+    row.querySelector('.remove').hidden = rows.length <= 1;
+  });
+  setupFields.querySelector('.add-step').hidden = rows.length >= MAX_STEPS;
+  validateSetup();
+}
+
+function renderSetup(settings) {
+  const fields = SETUP_FIELDS[setupMode].map((definition) => {
+    const field = element('div', { class: 'field', 'data-field': definition.key });
+    field.append(element('span', { class: 'field-label' }, definition.label));
+
+    if (definition.kind === 'time') {
+      const time = timeInput(definition.label);
+      writeTime(time, settings[definition.key]);
+      field.append(time, errorSlot());
+    } else if (definition.kind === 'count') {
+      const input = numberInput(definition.label, 2);
+      input.classList.add('count');
+      input.value = String(settings[definition.key]);
+      field.append(input, errorSlot());
+    } else {
+      const list = element('ol', { class: 'step-list' });
+      list.append(...settings.steps.map(stepRow));
+      const add = element('button', { type: 'button', class: 'add-step' }, 'Add step');
+      add.addEventListener('click', () => {
+        stepList().append(stepRow(NEW_STEP));
+        updateSteps();
+      });
+      field.append(list, errorSlot(), add);
+    }
+
+    if (definition.hint) {
+      field.append(element('span', { class: 'field-hint' }, definition.hint));
+    }
+    return field;
+  });
+
+  setupFields.replaceChildren(...fields);
+  if (setupMode === MODE.CUSTOM) {
+    updateSteps();
+  } else {
+    validateSetup();
+  }
+}
+
+function readSetup() {
+  const settings = {};
+  for (const definition of SETUP_FIELDS[setupMode]) {
+    const field = setupFields.querySelector(`[data-field="${definition.key}"]`);
+    if (definition.kind === 'time') {
+      settings[definition.key] = readTime(field);
+    } else if (definition.kind === 'count') {
+      settings[definition.key] = readCount(field.querySelector('.count'));
+    } else {
+      settings.steps = [...stepList().children].map((row) => ({
+        type: row.dataset.type,
+        durationMs: readTime(row),
+      }));
+    }
+  }
+  return settings;
+}
+
+// Returns the element that holds a field, for an error from validateSettings.
+function errorTarget(fieldName) {
+  const step = /^steps\.(\d+)\./.exec(fieldName);
+  if (step) {
+    return stepList().children[Number(step[1])] ?? null;
+  }
+  return setupFields.querySelector(`[data-field="${fieldName}"]`);
+}
+
+// Shows a message next to each field that is out of range, and disables Start
+// if there is one.
+function validateSetup() {
+  const errors = validateSettings(setupMode, readSetup());
+
+  for (const slot of setupFields.querySelectorAll('.field-error')) {
+    slot.textContent = '';
+  }
+  for (const input of setupFields.querySelectorAll('input')) {
+    input.removeAttribute('aria-invalid');
+  }
+
+  for (const error of errors) {
+    const target = errorTarget(error.field);
+    if (!target) {
+      continue;
+    }
+    // Each field and each step row has one error slot as a direct child.
+    const slot = [...target.children].find((child) => child.classList.contains('field-error'));
+    if (slot && !slot.textContent) {
+      slot.textContent = error.message;
+    }
+    // A time or count error marks the inputs of that field or step row.
+    if (error.field !== 'steps' && !error.field.endsWith('.type')) {
+      for (const input of target.querySelectorAll('input')) {
+        input.setAttribute('aria-invalid', 'true');
+      }
+    }
+  }
+
+  setupStartButton.disabled = errors.length > 0;
+  return errors;
+}
+
+function openSetup(mode) {
+  setupMode = mode;
+  setupTitle.textContent = SETUP_TITLES[mode];
+  renderSetup(loadSettings(mode));
+  showScreen(setupScreen);
+  setupFields.scrollTop = 0;
+}
+
+function onSetupStart() {
+  const settings = readSetup();
+  if (validateSetup().length > 0) {
+    return;
+  }
+  saveSettings(setupMode, settings);
+  openTimer(setupMode, settings);
+}
+
+setupFields.addEventListener('input', validateSetup);
+setupBackButton.addEventListener('click', () => showScreen(menuScreen));
+setupDefaultsButton.addEventListener('click', () => renderSetup(defaultSettings(setupMode)));
+setupStartButton.addEventListener('click', onSetupStart);
+
+/* ---------- Mode menu ---------- */
+
+for (const button of menuScreen.querySelectorAll('[data-mode]')) {
+  button.addEventListener('click', () => {
+    const { mode } = button.dataset;
+    if (mode === MODE.FIGHT_GONE_BAD) {
+      openTimer(mode, defaultSettings(mode));
+    } else {
+      openSetup(mode);
+    }
+  });
+}
+
+/* ---------- Timer screen ---------- */
+
+let workout = null; // { mode, segments, beeps, totalMs }
+let clockDisplay = null; // { digits, width }
+let roundDisplay = null; // { current, total, width }, or null
 let drawnClock = null;
 let drawnRound = null;
+let roundCount = 0; // The AMRAP round count.
+
+function openTimer(mode, settings) {
+  const segments = buildSegments(mode, settings);
+  workout = {
+    mode,
+    segments,
+    beeps: buildBeepSchedule(segments),
+    totalMs: totalDurationMs(segments),
+  };
+
+  const layout = roundLayout(mode, segments);
+  const hasRest = segments.some((segment) => segment.type === TYPE.REST);
+  const hasSide = layout !== null || hasRest;
+  sideEl.hidden = !hasSide;
+  roundEl.hidden = layout === null;
+  restEl.hidden = !hasRest;
+
+  clockDisplay = buildClock(clockEl, clockDigitCount(segments), hasSide);
+  roundDisplay = layout ? buildRound(roundEl, layout) : null;
+  timerScreen.style.setProperty('--clock-aspect', String(clockDisplay.width / DIGIT_H));
+  if (roundDisplay) {
+    const scale = Math.min(MAX_SIDE_SCALE, roundDisplay.width / ROUND_BASE_W);
+    timerScreen.style.setProperty('--round-aspect', String(roundDisplay.width / DIGIT_H));
+    timerScreen.style.setProperty('--side-scale', String(scale));
+  } else {
+    timerScreen.style.setProperty('--side-scale', '1');
+  }
+
+  state = STATE.IDLE;
+  bankedMs = 0;
+  roundCount = 0;
+  drawnClock = null;
+  drawnRound = undefined;
+  draw(getState(0, segments));
+  showControls();
+  showScreen(timerScreen);
+}
+
+// The AMRAP round count shows in Prep, Running, Paused and Finished, as
+// section 9 says.
+function roundText(view) {
+  if (workout.mode === MODE.AMRAP) {
+    return state === STATE.IDLE ? null : String(roundCount);
+  }
+  return view.round;
+}
 
 function draw(view) {
   if (view.display !== drawnClock) {
     drawnClock = view.display;
-    const characters = view.display.replace(':', '');
-    clockDigits.forEach((digit, index) => setDigit(digit, characters[index]));
+    setDigits(clockDisplay.digits, view.display.replace(':', ''));
     clockEl.setAttribute('aria-label', view.display);
   }
 
-  if (view.round !== drawnRound) {
-    drawnRound = view.round;
-    roundEl.classList.toggle('blank', view.round === null);
-    if (view.round === null) {
+  const round = roundText(view);
+  if (roundDisplay && round !== drawnRound) {
+    drawnRound = round;
+    roundEl.classList.toggle('blank', round === null);
+    if (round === null) {
       roundEl.removeAttribute('aria-label');
     } else {
-      const [current, total] = view.round.split('/');
-      setDigit(roundDigits[0], current);
-      setDigit(roundDigits[1], total);
-      roundEl.setAttribute('aria-label', view.round);
+      const [current, total = ''] = round.split('/');
+      setDigits(roundDisplay.current, current);
+      setDigits(roundDisplay.total, total);
+      roundEl.setAttribute('aria-label', workout.mode === MODE.AMRAP ? `${round} rounds` : `Round ${round}`);
     }
   }
 
   const isRest = view.type === TYPE.REST;
-  appEl.dataset.tone = isRest ? 'green' : 'red';
+  timerScreen.dataset.tone = isRest ? 'green' : 'red';
   restEl.classList.toggle('blank', !isRest);
 }
 
+// A concealed button keeps its space but cannot be seen or tapped.
+function conceal(button, concealed) {
+  button.classList.toggle('concealed', concealed);
+  button.disabled = concealed;
+}
+
+// The mode row holds +1 and -1 for AMRAP, and Done for For Time. It keeps its
+// space in every state, so the clock does not change size when they appear.
+// Done is alone in that row, so a quick second tap on Done hits no button.
+// Pause and Resume share the left half of the bottom row, so a quick second
+// tap on Pause hits Resume.
 function showControls() {
+  const isAmrap = workout.mode === MODE.AMRAP;
+  const isForTime = workout.mode === MODE.FOR_TIME;
   startButton.hidden = state !== STATE.IDLE;
   pauseButton.hidden = !(isCounting() || state === STATE.PAUSED);
   pauseButton.textContent = state === STATE.PAUSED ? 'Resume' : 'Pause';
   resetButton.hidden = !(state === STATE.PAUSED || state === STATE.FINISHED);
+  menuButton.hidden = !(state === STATE.IDLE || state === STATE.FINISHED);
+
+  modeRow.hidden = !(isAmrap || isForTime);
+  const showCount = isAmrap && (state === STATE.RUNNING || state === STATE.PAUSED);
+  for (const button of [minusButton, plusButton]) {
+    button.hidden = !isAmrap;
+    conceal(button, !showCount);
+  }
+  doneButton.hidden = !isForTime;
+  conceal(doneButton, !(isForTime && state === STATE.RUNNING));
 }
 
 /* ---------- Clock ---------- */
@@ -221,7 +654,8 @@ function elapsedNow() {
 // date. Returns the elapsed time that it read.
 function tick() {
   const elapsedMs = elapsedNow();
-  const view = getState(elapsedMs);
+  const view = getState(elapsedMs, workout.segments);
+  const stateBefore = state;
   audio.sync(elapsedMs);
   if (view.type === TYPE.FINISHED) {
     finish();
@@ -229,6 +663,10 @@ function tick() {
     state = view.type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
   }
   draw(view);
+  if (state !== stateBefore) {
+    // Prep to Running shows Done in For Time, and +1 and -1 in AMRAP.
+    showControls();
+  }
   return elapsedMs;
 }
 
@@ -289,11 +727,15 @@ function releaseWakeLock() {
 /* ---------- Transitions ---------- */
 
 function onStart() {
+  if (state !== STATE.IDLE) {
+    return;
+  }
+  beginLeg();
   audio.enable();
   bankedMs = 0;
-  beginLeg();
+  roundCount = 0;
   state = STATE.PREP;
-  audio.arm(BEEPS);
+  audio.arm(workout.beeps);
   requestWakeLock();
   tick();
   showControls();
@@ -303,7 +745,6 @@ function onStart() {
 function onPause() {
   const elapsedMs = tick();
   if (!isCounting()) {
-    showControls();
     return;
   }
   bankedMs = elapsedMs;
@@ -315,30 +756,74 @@ function onPause() {
 }
 
 function onResume() {
-  audio.enable();
   beginLeg();
-  state = getState(bankedMs).type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
-  audio.arm(BEEPS);
+  audio.enable();
+  state = getState(bankedMs, workout.segments).type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
+  audio.arm(workout.beeps);
   requestWakeLock();
   tick();
   showControls();
   startFrames();
 }
 
-function onReset() {
+// Stops the workout and goes to Idle.
+function stopWorkout() {
   state = STATE.IDLE;
   bankedMs = 0;
+  roundCount = 0;
   stopFrames();
   audio.disarm();
   releaseWakeLock();
-  draw(getState(0));
+}
+
+function onReset() {
+  stopWorkout();
+  draw(getState(0, workout.segments));
   showControls();
+}
+
+function onMenu() {
+  stopWorkout();
+  showScreen(menuScreen);
+}
+
+// For Time: ends the workout and keeps the elapsed time on the clock.
+function onDone() {
+  if (workout.mode !== MODE.FOR_TIME || state !== STATE.RUNNING) {
+    return;
+  }
+  const elapsedMs = tick();
+  if (state !== STATE.RUNNING) {
+    // The workout reached its end in this tick.
+    return;
+  }
+  audio.enable();
+  audio.playEndNow();
+  state = STATE.FINISHED;
+  bankedMs = elapsedMs;
+  stopFrames();
+  releaseWakeLock();
+  draw({ ...getState(elapsedMs, workout.segments), type: TYPE.FINISHED });
+  showControls();
+}
+
+function onRoundCount(delta) {
+  if (workout.mode !== MODE.AMRAP) {
+    return;
+  }
+  if (state === STATE.RUNNING) {
+    roundCount = adjustRoundCount(roundCount, delta);
+    tick();
+  } else if (state === STATE.PAUSED) {
+    roundCount = adjustRoundCount(roundCount, delta);
+    draw(getState(bankedMs, workout.segments));
+  }
 }
 
 // The end beep is already on the audio clock, so it keeps sounding here.
 function finish() {
   state = STATE.FINISHED;
-  bankedMs = TOTAL_MS;
+  bankedMs = workout.totalMs;
   audio.finish();
   stopFrames();
   releaseWakeLock();
@@ -351,8 +836,10 @@ function onReturnToPage() {
     return;
   }
   tick();
-  requestWakeLock();
-  startFrames();
+  if (isCounting()) {
+    requestWakeLock();
+    startFrames();
+  }
 }
 
 /* ---------- Events ---------- */
@@ -361,17 +848,24 @@ startButton.addEventListener('click', onStart);
 pauseButton.addEventListener('click', () => {
   if (state === STATE.PAUSED) {
     onResume();
-  } else {
+  } else if (isCounting()) {
     onPause();
   }
 });
 resetButton.addEventListener('click', onReset);
+doneButton.addEventListener('click', onDone);
+menuButton.addEventListener('click', onMenu);
+plusButton.addEventListener('click', () => onRoundCount(1));
+minusButton.addEventListener('click', () => onRoundCount(-1));
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     onReturnToPage();
+  } else {
+    audio.handleHide();
   }
 });
+window.addEventListener('pagehide', () => audio.handleHide());
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) {
     onReturnToPage();
@@ -394,5 +888,4 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-draw(getState(0));
-showControls();
+showScreen(menuScreen);

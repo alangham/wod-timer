@@ -17,18 +17,50 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
-  <main id="app" data-tone="red">
+  <section id="menu" class="screen menu" aria-labelledby="menu-title">
+    <h1 id="menu-title" class="screen-title">WOD Timer</h1>
+    <div class="mode-grid">
+      <button type="button" data-mode="fightGoneBad">Fight Gone Bad</button>
+      <button type="button" data-mode="forTime">For Time</button>
+      <button type="button" data-mode="amrap">AMRAP</button>
+      <button type="button" data-mode="emom">EMOM</button>
+      <button type="button" data-mode="tabata">Tabata</button>
+      <button type="button" data-mode="custom">Custom</button>
+    </div>
+  </section>
+
+  <section id="setup" class="screen setup" aria-labelledby="setup-title" hidden>
+    <header class="setup-header">
+      <button id="setup-back" type="button">Back</button>
+      <h1 id="setup-title" class="screen-title"></h1>
+    </header>
+    <div id="setup-fields" class="setup-fields"></div>
+    <footer class="setup-footer">
+      <button id="setup-defaults" type="button">Defaults</button>
+      <button id="setup-start" type="button" class="primary">Start</button>
+    </footer>
+  </section>
+
+  <main id="timer" class="screen timer" data-tone="red" hidden>
     <section class="display">
       <div id="clock" class="clock led" role="timer"></div>
-      <div class="side">
+      <div id="side" class="side">
         <div id="round" class="round led blank"></div>
         <div id="rest" class="rest blank">REST</div>
       </div>
     </section>
     <section class="controls">
-      <button id="start" type="button">Start</button>
-      <button id="pause" type="button" hidden>Pause</button>
-      <button id="reset" type="button" hidden>Reset</button>
+      <div id="mode-row" class="control-row" hidden>
+        <button id="minus" type="button" aria-label="Subtract 1 round">&minus;1</button>
+        <button id="plus" type="button" aria-label="Add 1 round">+1</button>
+        <button id="done" type="button">Done</button>
+      </div>
+      <div class="control-row">
+        <button id="start" type="button">Start</button>
+        <button id="pause" type="button" hidden>Pause</button>
+        <button id="reset" type="button" hidden>Reset</button>
+        <button id="menu-button" type="button">Menu</button>
+      </div>
     </section>
   </main>
 </body>

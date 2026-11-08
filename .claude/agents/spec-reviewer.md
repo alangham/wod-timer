@@ -13,10 +13,10 @@ Rules:
 
 Procedure:
 1. Read SPEC.md in full.
-2. Read every app file: index.html, styles.css, app.js, timeline.js, audio.js, manifest.webmanifest, sw.js, and the tests.
+2. Read every app file: index.html, styles.css, all .js files, manifest.webmanifest, sw.js, and the tests.
 3. Run `node --test` in the repository root. Record the result of each test.
-4. Check that the tests in `tests/timeline.test.js` cover every automated test A1 to A8 in SPEC.md section 13.1. A missing or weaker test is a finding.
-5. For each section 2 to 10 of SPEC.md, check the code against each requirement.
+4. Check that the tests in `tests/timeline.test.js` cover every automated test in the "Automated Tests" section of SPEC.md. A missing or weaker test is a finding.
+5. For each section of SPEC.md before "Acceptance Tests", check the code against each requirement.
 6. Look for these known failure types:
    - Time calculated by counting timer ticks instead of from `performance.now()`.
    - Beeps scheduled with `setTimeout` instead of the AudioContext clock.
@@ -36,4 +36,4 @@ Report shape:
    - file and line
    - what is wrong
    - the input or action that shows the failure
-4. Not verified: list each requirement that needs the manual phone tests in SPEC.md section 13.2, for example sound, wake lock and home screen install.
+4. Not verified: list each requirement that needs the manual phone tests in the "Manual Tests on a Phone" section of SPEC.md, for example sound, wake lock and home screen install.

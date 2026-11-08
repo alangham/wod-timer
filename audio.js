@@ -20,6 +20,9 @@ let voices = [];
 // beeps are on the audio clock yet.
 let originS = null;
 let lastAudioTimeS = null;
+// True from the moment the page is hidden until the beeps are next checked
+// against the audio clock. While it is true, no beep can play late.
+let wasHidden = false;
 
 // Creates or resumes the AudioContext. Call this only inside a tap handler,
 // because phone browsers block sound until the user touches the screen.
@@ -57,6 +60,16 @@ export function finish() {
   plan = [];
 }
 
+// For Time Done: removes all scheduled beeps and plays the end beep at once.
+// If the audio clock is stopped, the beep plays when the clock runs again,
+// which the tap on Done starts.
+export function playEndNow() {
+  disarm();
+  if (ctx) {
+    voices.push(startVoice({ timeMs: 0, type: 'end' }, ctx.currentTime));
+  }
+}
+
 // Call this on each frame. Puts the remaining beeps on the audio clock, and moves
 // them if the audio clock and the workout clock no longer agree.
 // currentTime moves in steps, and it does not move while the audio clock is
@@ -65,7 +78,13 @@ export function sync(elapsedMs) {
   if (ctx && originS !== null && ctx.currentTime === lastAudioTimeS) {
     return;
   }
-  moveBeeps(elapsedMs, STALE_DRIFT_S * 1000);
+  moveBeeps(elapsedMs, wasHidden ? 0 : STALE_DRIFT_S * 1000);
+}
+
+// Call this when the page is hidden. The first check after the page returns
+// then plays no late beep, whether a frame or handleReturn() comes first.
+export function handleHide() {
+  wasHidden = true;
 }
 
 // Call this when the page becomes visible. A beep with a time that passed while
@@ -89,6 +108,7 @@ function moveBeeps(elapsedMs, lateLimitMs) {
 
   const nowS = ctx.currentTime;
   lastAudioTimeS = nowS;
+  wasHidden = false;
   const newOriginS = nowS - elapsedMs / 1000;
   const driftS = originS === null ? Infinity : Math.abs(newOriginS - originS);
   if (driftS <= MAX_DRIFT_S) {
