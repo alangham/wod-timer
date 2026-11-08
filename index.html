@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WOD Timer</title>
+  <meta name="description" content="A workout timer with LED-style digits.">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="WOD Timer">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main id="app" data-tone="red">
+    <section class="display">
+      <div id="clock" class="clock led" role="timer"></div>
+      <div class="side">
+        <div id="round" class="round led blank"></div>
+        <div id="rest" class="rest blank">REST</div>
+      </div>
+    </section>
+    <section class="controls">
+      <button id="start" type="button">Start</button>
+      <button id="pause" type="button" hidden>Pause</button>
+      <button id="reset" type="button" hidden>Reset</button>
+    </section>
+  </main>
+</body>
+</html>

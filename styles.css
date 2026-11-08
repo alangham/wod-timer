@@ -1,0 +1,176 @@
+:root {
+  --red-lit: #ff1a1a;
+  --red-unlit: #2b0606;
+  --green-lit: #1aff4f;
+  --green-unlit: #062b0f;
+  --side: min(18vw, 34vh);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(8px, env(safe-area-inset-right))
+    max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  background: #000;
+}
+
+#app[data-tone="red"] {
+  --lit: var(--red-lit);
+  --unlit: var(--red-unlit);
+}
+
+#app[data-tone="green"] {
+  --lit: var(--green-lit);
+  --unlit: var(--green-unlit);
+}
+
+/* Landscape is the primary layout: the clock on the left, the round on the right. */
+.display {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 2vw;
+}
+
+.clock {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+.clock svg,
+.round svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.side {
+  flex: 0 0 var(--side);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--side) * 0.12);
+}
+
+.round {
+  width: 100%;
+  aspect-ratio: 160 / 100;
+}
+
+.rest {
+  color: var(--lit);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: calc(var(--side) * 0.32);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.04em;
+}
+
+.blank {
+  visibility: hidden;
+}
+
+.led .seg {
+  fill: var(--unlit);
+}
+
+.led .seg.on {
+  fill: var(--lit);
+}
+
+.controls {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 12px;
+}
+
+button {
+  flex: 1 1 0;
+  min-height: 72px;
+  padding: 0 16px;
+  border: 2px solid #5a5a5a;
+  border-radius: 14px;
+  background: #1c1c1c;
+  color: #fff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: clamp(26px, 6vmin, 48px);
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Pause and Resume stay in the left half, and Reset appears in the right half.
+   A quick second tap on Pause then hits Resume, not Reset. */
+#pause {
+  flex: 0 0 calc(50% - 6px);
+}
+
+button:active {
+  background: #3a3a3a;
+}
+
+/* Portrait: the width limits the clock, so the digits are smaller. */
+@media (orientation: portrait) {
+  .display {
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 5vw;
+  }
+
+  .clock {
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 218 / 100;
+  }
+
+  .side {
+    flex: 0 0 auto;
+    flex-direction: row;
+    gap: 6vw;
+  }
+
+  .round {
+    width: 34vw;
+  }
+
+  .rest {
+    font-size: 13vw;
+  }
+
+  button {
+    min-height: 96px;
+  }
+}
