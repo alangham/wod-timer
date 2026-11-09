@@ -67,8 +67,10 @@ const COLON_W = 14;
 const SLASH_W = 24;
 const HALF = 7; // Half the thickness of a segment.
 const TIP = 1.5; // Space between the tips of two segments.
-const ROUND_BASE_W = 160; // The width of the `1/3` round display.
-const MAX_SIDE_SCALE = 1.5;
+// The width of the word REST and the gap before it, in heights of the row below
+// the clock. styles.css uses the same 0.5 font size and 0.15 gap.
+const REST_ASPECT = 1.5;
+const SIDE_GAP = 0.15;
 
 // A space is a digit with all segments unlit.
 const SEGMENTS_ON = {
@@ -160,11 +162,11 @@ function setDigits(digits, text) {
 }
 
 // `M:SS` with 3 digits, or `MM:SS` with 4 digits.
-function buildClock(host, digitCount, alignRight) {
+function buildClock(host, digitCount) {
   const width = DIGIT_W * digitCount + DIGIT_GAP * digitCount + COLON_W;
   const svg = svgElement('svg', {
     viewBox: `0 0 ${width} ${DIGIT_H}`,
-    preserveAspectRatio: alignRight ? 'xMaxYMid meet' : 'xMidYMid meet',
+    preserveAspectRatio: 'xMidYMid meet',
     'aria-hidden': 'true',
   });
 
@@ -245,18 +247,21 @@ const setupBackButton = document.getElementById('setup-back');
 const setupDefaultsButton = document.getElementById('setup-defaults');
 const setupStartButton = document.getElementById('setup-start');
 
+const displayEl = document.getElementById('display');
 const clockEl = document.getElementById('clock');
 const sideEl = document.getElementById('side');
 const roundEl = document.getElementById('round');
 const restEl = document.getElementById('rest');
-const modeRow = document.getElementById('mode-row');
-const minusButton = document.getElementById('minus');
-const plusButton = document.getElementById('plus');
-const startButton = document.getElementById('start');
-const pauseButton = document.getElementById('pause');
-const resetButton = document.getElementById('reset');
-const doneButton = document.getElementById('done');
+const controlsEl = document.getElementById('controls');
 const menuButton = document.getElementById('menu-button');
+const resetIconButton = document.getElementById('reset-icon');
+const minusButton = document.getElementById('minus');
+const startButton = document.getElementById('start');
+const plusButton = document.getElementById('plus');
+const doneButton = document.getElementById('done');
+const resumeButton = document.getElementById('resume');
+const resetButton = document.getElementById('reset');
+const pauseButton = document.getElementById('pause');
 
 function showScreen(screen) {
   for (const element of [menuScreen, setupScreen, timerScreen]) {
@@ -544,21 +549,26 @@ function openTimer(mode, settings) {
   sideEl.hidden = !hasSide;
   roundEl.hidden = layout === null;
   restEl.hidden = !hasRest;
+  displayEl.classList.toggle('no-side', !hasSide);
 
-  clockDisplay = buildClock(clockEl, clockDigitCount(segments), hasSide);
+  clockDisplay = buildClock(clockEl, clockDigitCount(segments));
   roundDisplay = layout ? buildRound(roundEl, layout) : null;
-  timerScreen.style.setProperty('--clock-aspect', String(clockDisplay.width / DIGIT_H));
+  // The width of the row below the clock, in heights of that row.
+  let sideAspect = 0;
   if (roundDisplay) {
-    const scale = Math.min(MAX_SIDE_SCALE, roundDisplay.width / ROUND_BASE_W);
+    sideAspect += roundDisplay.width / DIGIT_H;
     timerScreen.style.setProperty('--round-aspect', String(roundDisplay.width / DIGIT_H));
-    timerScreen.style.setProperty('--side-scale', String(scale));
-  } else {
-    timerScreen.style.setProperty('--side-scale', '1');
   }
+  if (hasRest) {
+    sideAspect += REST_ASPECT + (roundDisplay ? SIDE_GAP : 0);
+  }
+  timerScreen.style.setProperty('--clock-aspect', String(clockDisplay.width / DIGIT_H));
+  timerScreen.style.setProperty('--side-aspect', String(sideAspect || 1));
 
   state = STATE.IDLE;
   bankedMs = 0;
   roundCount = 0;
+  hidePause();
   drawnClock = null;
   drawnRound = undefined;
   draw(getState(0, segments));
@@ -601,40 +611,75 @@ function draw(view) {
   restEl.classList.toggle('blank', !isRest);
 }
 
-// A concealed button keeps its space but cannot be seen or tapped.
-function conceal(button, concealed) {
-  button.classList.toggle('concealed', concealed);
-  button.disabled = concealed;
-}
+/* ---------- Controls ---------- */
 
-// The mode row holds -1 and +1 for AMRAP, and Done for For Time. It keeps its
-// space in every state, so the clock does not change size when they appear.
-// When the workout ends, the mode row is empty, so a late tap on Done, -1 or +1
-// hits no button.
-// The bottom row in each state:
-//   Idle: Menu | Start
-//   Prep and Running: Pause
-//   Paused: Reset | Resume
-//   Finished: Menu | Reset
-// A quick second tap on the center of Pause hits Resume.
+// The controls in each state, as in section 9. The order on the screen is set
+// by index.html: the small Menu, Reset and -1 first, the large button next, and
+// Pause last. So a quick second tap on Pause hits Resume, not the small Reset.
+//   Idle:     Menu, Start
+//   Prep:     Pause when revealed
+//   Running:  -1 and +1 in AMRAP, Done in For Time, Pause when revealed
+//   Paused:   Reset, Resume
+//   Finished: Menu, Reset
+// With no control, the controls section is hidden and the display uses the full
+// screen. A hidden button takes no space.
 function showControls() {
   const isAmrap = workout.mode === MODE.AMRAP;
   const isForTime = workout.mode === MODE.FOR_TIME;
-  startButton.hidden = state !== STATE.IDLE;
-  pauseButton.hidden = !(isCounting() || state === STATE.PAUSED);
-  pauseButton.textContent = state === STATE.PAUSED ? 'Resume' : 'Pause';
-  resetButton.hidden = !(state === STATE.PAUSED || state === STATE.FINISHED);
-  resetButton.classList.toggle('wide', state === STATE.FINISHED);
-  menuButton.hidden = !(state === STATE.IDLE || state === STATE.FINISHED);
-
-  modeRow.hidden = !(isAmrap || isForTime);
-  const showCount = isAmrap && (state === STATE.RUNNING || state === STATE.PAUSED);
-  for (const button of [minusButton, plusButton]) {
-    button.hidden = !isAmrap;
-    conceal(button, !showCount);
+  const isRunning = state === STATE.RUNNING;
+  const small = new Map([
+    [menuButton, state === STATE.IDLE || state === STATE.FINISHED],
+    [resetIconButton, state === STATE.PAUSED],
+    [minusButton, isAmrap && isRunning],
+    [pauseButton, isCounting() && pauseRevealed],
+  ]);
+  const large = new Map([
+    [startButton, state === STATE.IDLE],
+    [plusButton, isAmrap && isRunning],
+    [doneButton, isForTime && isRunning],
+    [resumeButton, state === STATE.PAUSED],
+    [resetButton, state === STATE.FINISHED],
+  ]);
+  for (const [button, show] of [...small, ...large]) {
+    button.hidden = !show;
   }
-  doneButton.hidden = !isForTime;
-  conceal(doneButton, !(isForTime && state === STATE.RUNNING));
+  const hasLarge = [...large.values()].some(Boolean);
+  const hasSmall = [...small.values()].some(Boolean);
+  controlsEl.hidden = !hasLarge && !hasSmall;
+  controlsEl.classList.toggle('compact', !hasLarge);
+  timerScreen.dataset.state = state;
+}
+
+// Pause is hidden in Prep and Running. A tap on the display shows it for 3 s,
+// and each new tap starts the 3 s again. The tap only shows Pause. It never
+// pauses the timer.
+const PAUSE_SHOW_MS = 3000;
+let pauseRevealed = false;
+let pauseHideTimer = null;
+
+function revealPause() {
+  clearTimeout(pauseHideTimer);
+  pauseHideTimer = setTimeout(() => {
+    hidePause();
+    showControls();
+  }, PAUSE_SHOW_MS);
+  if (!pauseRevealed) {
+    pauseRevealed = true;
+    showControls();
+  }
+}
+
+// Clears the reveal. The caller updates the controls.
+function hidePause() {
+  clearTimeout(pauseHideTimer);
+  pauseHideTimer = null;
+  pauseRevealed = false;
+}
+
+function onDisplayTap() {
+  if (workout && isCounting()) {
+    revealPause();
+  }
 }
 
 /* ---------- Clock ---------- */
@@ -749,12 +794,17 @@ function onStart() {
 }
 
 function onPause() {
+  if (!isCounting()) {
+    return;
+  }
+  // The workout can reach its end in this tick.
   const elapsedMs = tick();
   if (!isCounting()) {
     return;
   }
   bankedMs = elapsedMs;
   state = STATE.PAUSED;
+  hidePause();
   stopFrames();
   audio.disarm();
   releaseWakeLock();
@@ -762,6 +812,9 @@ function onPause() {
 }
 
 function onResume() {
+  if (state !== STATE.PAUSED) {
+    return;
+  }
   beginLeg();
   audio.enable();
   state = getState(bankedMs, workout.segments).type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
@@ -777,6 +830,7 @@ function stopWorkout() {
   state = STATE.IDLE;
   bankedMs = 0;
   roundCount = 0;
+  hidePause();
   stopFrames();
   audio.disarm();
   releaseWakeLock();
@@ -807,29 +861,27 @@ function onDone() {
   audio.playEndNow();
   state = STATE.FINISHED;
   bankedMs = elapsedMs;
+  hidePause();
   stopFrames();
   releaseWakeLock();
   draw({ ...getState(elapsedMs, workout.segments), type: TYPE.FINISHED });
   showControls();
 }
 
+// +1 and -1 show only in Running, as section 9 says.
 function onRoundCount(delta) {
-  if (workout.mode !== MODE.AMRAP) {
+  if (workout.mode !== MODE.AMRAP || state !== STATE.RUNNING) {
     return;
   }
-  if (state === STATE.RUNNING) {
-    roundCount = adjustRoundCount(roundCount, delta);
-    tick();
-  } else if (state === STATE.PAUSED) {
-    roundCount = adjustRoundCount(roundCount, delta);
-    draw(getState(bankedMs, workout.segments));
-  }
+  roundCount = adjustRoundCount(roundCount, delta);
+  tick();
 }
 
 // The end beep is already on the audio clock, so it keeps sounding here.
 function finish() {
   state = STATE.FINISHED;
   bankedMs = workout.totalMs;
+  hidePause();
   audio.finish();
   stopFrames();
   releaseWakeLock();
@@ -851,18 +903,15 @@ function onReturnToPage() {
 /* ---------- Events ---------- */
 
 startButton.addEventListener('click', onStart);
-pauseButton.addEventListener('click', () => {
-  if (state === STATE.PAUSED) {
-    onResume();
-  } else if (isCounting()) {
-    onPause();
-  }
-});
+pauseButton.addEventListener('click', onPause);
+resumeButton.addEventListener('click', onResume);
 resetButton.addEventListener('click', onReset);
+resetIconButton.addEventListener('click', onReset);
 doneButton.addEventListener('click', onDone);
 menuButton.addEventListener('click', onMenu);
 plusButton.addEventListener('click', () => onRoundCount(1));
 minusButton.addEventListener('click', () => onRoundCount(-1));
+displayEl.addEventListener('click', onDisplayTap);
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {

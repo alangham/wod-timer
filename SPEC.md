@@ -1,8 +1,10 @@
-# WOD Timer: Specification, Version 2
+# WOD Timer: Specification, Version 2.1
 
 ## 1. Purpose
 
 A web timer for CrossFit workouts.
+
+Version 2.1 changes only the timer screen layout and its controls. See sections 6 and 9. All other behavior is the same as version 2.
 
 Version 2 has six choices on the mode menu:
 - Fight Gone Bad: a one-tap preset with fixed settings.
@@ -135,8 +137,32 @@ Round text for each segment:
 - Digits in a seven-segment LED style, drawn with SVG or CSS in code. Show unlit segments faintly.
 - Format of the clock: `M:SS` below 10 minutes, `MM:SS` from 10 minutes.
 - Make the digits as large as the screen allows.
-- Landscape is the primary layout. Portrait must also work, with smaller digits.
-- Show the round display next to the clock.
+- Show the round display below the clock.
+
+**Timer screen layout**
+- The clock is the main item. The controls must take as little space as possible.
+- Landscape:
+  - Put the controls in a rail on the right edge of the screen.
+  - The rail is at most 20% of the screen width.
+  - The clock and the round display use the remaining width and the full height.
+- Portrait:
+  - Put the controls in one row at the bottom of the screen.
+  - The row is at most 72 px high.
+  - The clock and the round display use the remaining space.
+- When no control shows, there is no rail and no row. The clock uses the full screen.
+- Respect the safe-area insets of the phone, for example the notch and the home indicator.
+
+**Control style**
+- A state has at most one large button. The large button is the action needed during the workout.
+- All other controls are small icon buttons.
+- A small button is at least 48 px by 48 px.
+- Draw each icon as inline SVG in code. Do not load an icon font or an icon file from the network.
+- Give each icon button an `aria-label` with its action name, for example "Pause".
+- In the landscape rail, the large button fills the rail height that the small buttons do not use.
+- In the portrait row, the large button fills the row width that the small buttons do not use.
+- Large button styles:
+  - Start, +1 and Done: red border and dark red fill.
+  - Resume and Reset: light border and dark gray fill.
 - Colors:
   - Prep countdown: red digits. No round display.
   - Work: red digits.
@@ -172,22 +198,44 @@ Round text for each segment:
 
 States: Idle, Prep, Running, Paused, Finished.
 
-| Button | Shows in | Action |
-|---|---|---|
-| Start | Idle | Go to Prep. Turn on sound. Request the wake lock. |
-| Pause | Prep, Running | Stop the clock and all scheduled beeps. |
-| Resume | Paused | Continue from the same remaining time. |
-| Reset | Paused, Finished | Go to Idle. Set the AMRAP round count to 0. |
-| Menu | Idle, Finished | Go to the mode menu. |
-| Done | Running, For Time only | Go to Finished. Keep the elapsed time on the clock. |
-| +1 | Running, Paused, AMRAP only | Add 1 to the round count. |
-| −1 | Running, Paused, AMRAP only | Subtract 1 from the round count. Not below 0. |
+Controls in each state:
 
-- Pause and Resume use one button.
+| State | Large button | Small icon buttons |
+|---|---|---|
+| Idle | Start | Menu |
+| Prep, all modes | none | Pause, hidden until revealed |
+| Running: Fight Gone Bad, EMOM, Tabata, Custom | none | Pause, hidden until revealed |
+| Running: For Time | Done | Pause, hidden until revealed |
+| Running: AMRAP | +1 | −1; Pause, hidden until revealed |
+| Paused, all modes | Resume | Reset |
+| Finished, all modes | Reset | Menu |
+
+Actions:
+
+| Control | Action |
+|---|---|
+| Start | Go to Prep. Turn on sound. Request the wake lock. |
+| Pause | Go to Paused. Stop the clock and all scheduled beeps. |
+| Resume | Go back to Prep or Running. Continue from the same remaining time. |
+| Reset | Go to Idle. Set the AMRAP round count to 0. |
+| Menu | Go to the mode menu. |
+| Done | For Time only. Go to Finished. Keep the elapsed time on the clock. |
+| +1 | AMRAP only. Add 1 to the round count. |
+| −1 | AMRAP only. Subtract 1 from the round count. Not below 0. |
+
+Hidden Pause:
+- In Prep and Running, the Pause button is hidden.
+- A tap on the clock area shows the Pause button for 3 s.
+- Each new tap on the clock area restarts the 3 s period.
+- After 3 s with no tap on the clock area, hide the Pause button again.
+- A tap on the clock area must never pause the timer. Only the Pause button pauses.
+- A tap on +1, −1 or Done does not show the Pause button.
+- While the Pause button is hidden, the layout must not reserve space for it. When it shows, the layout may change to make room.
+
+Other rules:
 - In Idle, the clock shows the first prep value `0:10`.
 - The AMRAP round count starts at 0. Show it in the round display during Prep, Running, Paused and Finished.
-- Make **+1** the largest button on the AMRAP timer screen.
-- Make all buttons large enough to hit with a sweaty finger.
+- In Paused, AMRAP shows no +1 and no −1 button.
 
 ## 10. Saved Settings
 
@@ -416,13 +464,17 @@ Each test starts from a fresh page load of the GitHub Pages URL, with the phone 
 **M10. Pause, resume and reset**
 1. Tap **Fight Gone Bad**, then **Start**.
 2. Wait 20 s.
-3. Tap **Pause** and note the clock value.
-4. Wait 10 s.
-5. Expect the same clock value and no beeps.
-6. Tap **Resume**.
-7. Expect the clock to continue from the noted value.
-8. Tap **Pause**, then **Reset**.
-9. Expect Idle with `0:10`.
+3. Tap the clock.
+4. Tap **Pause**.
+5. Note the clock value.
+6. Wait 10 s.
+7. Expect the same clock value and no beeps.
+8. Tap **Resume**.
+9. Expect the clock to continue from the noted value.
+10. Tap the clock.
+11. Tap **Pause**.
+12. Tap **Reset**.
+13. Expect Idle with `0:10`.
 
 **M11. Screen stays on**
 1. Set the phone auto-lock to its shortest time.
@@ -440,10 +492,12 @@ Each test starts from a fresh page load of the GitHub Pages URL, with the phone 
 **M13. Silent switch, iPhone only**
 1. Set the ring/silent switch to ring.
 2. Tap **Fight Gone Bad**, then **Start**, and listen for the prep beeps.
-3. Tap **Pause**, then **Reset**.
-4. Set the switch to silent.
-5. Tap **Start** and listen for the prep beeps.
-6. Record if the beeps play in each position.
+3. Tap the clock.
+4. Tap **Pause**.
+5. Tap **Reset**.
+6. Set the switch to silent.
+7. Tap **Start** and listen for the prep beeps.
+8. Record if the beeps play in each position.
 
 **M14. Offline**
 1. Open the app once while online.
@@ -457,3 +511,30 @@ Each test starts from a fresh page load of the GitHub Pages URL, with the phone 
 2. Add the app to the home screen.
 3. Open the app from the home screen icon.
 4. Expect the app to open without the browser address bar.
+
+**M16. Landscape layout**
+1. Open the app from the home screen icon.
+2. Turn the phone to landscape.
+3. Tap **AMRAP**, then **Start**, then **Start** on the timer screen.
+4. After prep, expect the controls in a rail on the right edge, at most 20% of the screen width.
+5. Expect a large **+1** button and a small **−1** icon button in the rail.
+6. Expect the clock to use the full screen height.
+
+**M17. Hidden Pause**
+1. Tap **Fight Gone Bad**, then **Start**.
+2. Expect no buttons on the screen while the timer runs.
+3. Tap the clock once.
+4. Expect the Pause button.
+5. Wait 4 s without a tap.
+6. Expect the Pause button to go away and the timer to keep running.
+7. Tap the clock 5 times, 1 s apart.
+8. Expect the timer to keep running.
+
+**M18. AMRAP paused**
+1. Tap **AMRAP**, then **Start**, then **Start** on the timer screen.
+2. After prep, tap **+1** two times.
+3. Tap the clock.
+4. Tap **Pause**.
+5. Expect a large **Resume** button and a small Reset icon button.
+6. Expect no **+1** and no **−1** button.
+7. Expect the round display to show `2`.

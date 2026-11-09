@@ -271,26 +271,57 @@ button.primary:active:not(:disabled) {
   --unlit: var(--green-unlit);
 }
 
-/* app.js sets --clock-aspect, --round-aspect and --side-scale for each workout. */
+/* Landscape: the display on the left, and the control rail on the right edge.
+   The rail is at most 20% of the screen width, in every state. A small button
+   is as wide as the rail, so it is at least 48 px wide on a screen 240 px wide
+   or more. A phone in landscape is at least 568 px wide. */
 #timer {
-  --side-base: min(18vw, 34vh);
-  --side: calc(var(--side-base) * var(--side-scale, 1));
-}
-
-/* Landscape is the primary layout: the clock on the left, the round on the right. */
-.display {
-  flex: 1 1 0;
-  min-height: 0;
-  display: flex;
   flex-direction: row;
-  align-items: stretch;
-  gap: 2vw;
+  --rail: min(20vw, 132px);
+  --small: 72px;
 }
 
-.clock {
+/* The display is a size container. The clock and the round display take their
+   size from the space that the controls leave. app.js sets --clock-aspect,
+   --round-aspect and --side-aspect for each workout. Each aspect is a width
+   divided by a height.
+   --clock-fit is the clock height when the display width limits the clock.
+   The round display row takes the height that the clock does not use, from 22%
+   to 40% of the display height. The row is never wider than the display, and
+   never more than 80% of the clock height, so the clock stays the main item. */
+.display {
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  --gap: 3cqh;
+  --clock-fit: calc(100cqw / var(--clock-aspect, 2.18));
+  --side-h: min(
+    clamp(22cqh, 100cqh - var(--clock-fit) - var(--gap), 40cqh),
+    100cqw / var(--side-aspect, 1.6),
+    var(--clock-fit) * 0.8
+  );
+}
+
+/* In Prep and Running, a tap on the display shows the Pause button. */
+#timer[data-state="Prep"] .display,
+#timer[data-state="Running"] .display {
+  cursor: pointer;
+}
+
+.clock {
+  flex: 0 0 auto;
+  width: 100%;
+  height: min(var(--clock-fit), 100cqh - var(--side-h) - var(--gap));
+}
+
+/* For Time has no round display, so the clock can use the full height. */
+.display.no-side .clock {
+  height: min(var(--clock-fit), 100cqh);
 }
 
 .clock svg,
@@ -300,23 +331,28 @@ button.primary:active:not(:disabled) {
   height: 100%;
 }
 
+/* The round display and the word REST, in one row below the clock.
+   app.js uses the same 0.15 gap for --side-aspect. */
 .side {
-  flex: 0 0 var(--side);
+  flex: 0 0 auto;
+  height: var(--side-h);
+  margin-top: var(--gap);
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: calc(var(--side-base) * 0.12);
+  gap: calc(var(--side-h) * 0.15);
 }
 
 .round {
-  width: 100%;
-  aspect-ratio: var(--round-aspect, 1.6);
+  flex: 0 0 auto;
+  width: calc(var(--side-h) * var(--round-aspect, 1.6));
+  height: 100%;
 }
 
 .rest {
+  flex: 0 0 auto;
   color: var(--lit);
-  font-size: calc(var(--side-base) * 0.32);
+  font-size: calc(var(--side-h) * 0.5);
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0.04em;
@@ -334,87 +370,100 @@ button.primary:active:not(:disabled) {
   fill: var(--lit);
 }
 
+/* The controls. In the landscape rail, the large button fills the height that
+   the small buttons do not use. A state without a large button has a narrow
+   rail, as wide as a small button. */
 .controls {
-  flex: 0 0 auto;
+  flex: 0 0 var(--rail);
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.control-row {
-  display: flex;
-  gap: 12px;
+.controls.compact {
+  flex-basis: min(var(--small), 20vw);
 }
 
-/* Each row is full. In the bottom row, Menu and Reset in Paused take the narrow
-   left part. Start, Resume and Reset in Finished take the wide right part.
-   Pause is alone in the bottom row, so it takes the full row, and its center
-   is over Resume. */
-.control-row button {
-  flex: 1 1 0;
+.controls button {
   min-width: 0;
-  padding: 0 8px;
+  min-height: 0;
+  padding: 0 4px;
   white-space: nowrap;
-  font-size: clamp(26px, 6vmin, 48px);
 }
 
-.control-row button.wide {
-  flex-grow: 2;
+.controls .big {
+  flex: 1 1 0;
+  font-size: clamp(18px, calc(var(--rail) * 0.2), 32px);
 }
 
-#minus {
-  flex: 0 0 22%;
+/* Start, +1 and Done use the red .primary style. Resume and Reset use this. */
+.controls .secondary {
+  border-color: #d9d9d9;
+  background: #2a2a2a;
 }
 
-/* +1 is the largest button on the AMRAP timer screen. Pause is wider than +1,
-   so +1 must be taller than Pause by more than the width ratio. */
+.controls .secondary:active:not(:disabled) {
+  background: #474747;
+}
+
 #plus {
-  min-height: 100px;
+  font-size: clamp(30px, calc(var(--rail) * 0.36), 56px);
 }
 
-/* A concealed button keeps its space, so the clock does not move. */
-.concealed {
-  visibility: hidden;
+/* A small icon button is at least 48 px by 48 px. */
+.controls .icon {
+  flex: 0 0 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
-/* Portrait: the width limits the clock, so the digits are smaller. */
+.icon svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon svg .fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* Portrait: the display on top, and one control row at the bottom. The row is
+   72 px high. The large button fills the width that the small buttons do not
+   use. */
 @media (orientation: portrait) {
   .mode-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .display {
+  #timer {
     flex-direction: column;
-    justify-content: center;
-    align-items: stretch;
-    gap: 5vw;
   }
 
-  .clock {
-    flex: 0 0 auto;
-    width: 100%;
-    aspect-ratio: var(--clock-aspect, 2.18);
-  }
-
-  .side {
-    flex: 0 0 auto;
+  .controls,
+  .controls.compact {
+    flex: 0 0 72px;
     flex-direction: row;
-    gap: 6vw;
   }
 
-  .round {
-    width: min(calc(34vw * var(--side-scale, 1)), 52vw);
+  .controls .icon {
+    flex: 0 0 var(--small);
   }
 
-  .rest {
-    font-size: 13vw;
-  }
-
-  .control-row button {
-    min-height: 96px;
+  .controls .big {
+    font-size: 30px;
   }
 
   #plus {
-    min-height: 144px;
+    font-size: 44px;
   }
 }

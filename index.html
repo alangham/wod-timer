@@ -42,25 +42,34 @@
   </section>
 
   <main id="timer" class="screen timer" data-tone="red" hidden>
-    <section class="display">
+    <section id="display" class="display">
       <div id="clock" class="clock led" role="timer"></div>
       <div id="side" class="side">
         <div id="round" class="round led blank"></div>
         <div id="rest" class="rest blank">REST</div>
       </div>
     </section>
-    <section class="controls">
-      <div id="mode-row" class="control-row" hidden>
-        <button id="minus" type="button" aria-label="Subtract 1 round">&minus;1</button>
-        <button id="plus" type="button" class="primary" aria-label="Add 1 round">+1</button>
-        <button id="done" type="button" class="primary">Done</button>
-      </div>
-      <div class="control-row">
-        <button id="menu-button" type="button">Menu</button>
-        <button id="reset" type="button" hidden>Reset</button>
-        <button id="start" type="button" class="wide">Start</button>
-        <button id="pause" type="button" class="wide" hidden>Pause</button>
-      </div>
+    <!-- The order is the order on the screen: top to bottom in the landscape
+         rail, left to right in the portrait row. Small buttons Menu, Reset and
+         -1 come first. The large button comes next. Pause comes last. -->
+    <section id="controls" class="controls">
+      <button id="menu-button" type="button" class="icon" aria-label="Menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M4 12h16M4 17.5h16"/></svg>
+      </button>
+      <button id="reset-icon" type="button" class="icon" aria-label="Reset" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.94 9A7 7 0 1 0 12 5.5M14.8 2.7L12 5.5l2.8 2.8"/></svg>
+      </button>
+      <button id="minus" type="button" class="icon" aria-label="&minus;1" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12.5h7M14 8l3.5-2.5V19"/></svg>
+      </button>
+      <button id="start" type="button" class="big primary">Start</button>
+      <button id="plus" type="button" class="big primary" hidden>+1</button>
+      <button id="done" type="button" class="big primary" hidden>Done</button>
+      <button id="resume" type="button" class="big secondary" hidden>Resume</button>
+      <button id="reset" type="button" class="big secondary" hidden>Reset</button>
+      <button id="pause" type="button" class="icon" aria-label="Pause" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+      </button>
     </section>
   </main>
 </body>
