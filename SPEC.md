@@ -1,10 +1,12 @@
-# WOD Timer: Specification, Version 2.1
+# WOD Timer: Specification, Version 2.2
 
 ## 1. Purpose
 
 A web timer for CrossFit workouts.
 
-Version 2.1 changes only the timer screen layout and its controls. See sections 6 and 9. All other behavior is the same as version 2.
+Version 2.1 changed the timer screen layout and its controls. See sections 6 and 9.
+
+Version 2.2 adds the tap guard in section 9 and makes section 6 match the version 2.1 build. All other behavior is the same as version 2.1.
 
 Version 2 has six choices on the mode menu:
 - Fight Gone Bad: a one-tap preset with fixed settings.
@@ -138,6 +140,8 @@ Round text for each segment:
 - Format of the clock: `M:SS` below 10 minutes, `MM:SS` from 10 minutes.
 - Make the digits as large as the screen allows.
 - Show the round display below the clock.
+- The round display is at most 80% of the clock height.
+- Show the word `REST` in the same row as the round display, to the right of it.
 
 **Timer screen layout**
 - The clock is the main item. The controls must take as little space as possible.
@@ -164,9 +168,9 @@ Round text for each segment:
   - Start, +1 and Done: red border and dark red fill.
   - Resume and Reset: light border and dark gray fill.
 - Colors:
-  - Prep countdown: red digits. No round display.
+  - Prep countdown: red digits. No round display, except the AMRAP round count.
   - Work: red digits.
-  - Rest: green digits and the word `REST` next to the clock.
+  - Rest: green digits and the word `REST`.
 - Do not use the Rogue name, the Rogue logo, or any other brand name or logo.
 - The mode menu and the setup screens use the same black background and red accents. They do not use LED digits.
 
@@ -231,6 +235,13 @@ Hidden Pause:
 - A tap on the clock area must never pause the timer. Only the Pause button pauses.
 - A tap on +1, −1 or Done does not show the Pause button.
 - While the Pause button is hidden, the layout must not reserve space for it. When it shows, the layout may change to make room.
+
+Tap guard:
+- A new button can appear where the finger just tapped. The tap guard stops a late tap or a double tap from hitting it.
+- After each state change, all controls except Pause ignore taps for 0.5 s.
+- After the change to Finished, all controls ignore taps for 1.5 s.
+- A tap that the guard ignores does nothing. It does not show the Pause button.
+- The tap guard does not apply to taps on the clock area.
 
 Other rules:
 - In Idle, the clock shows the first prep value `0:10`.
@@ -538,3 +549,15 @@ Each test starts from a fresh page load of the GitHub Pages URL, with the phone 
 5. Expect a large **Resume** button and a small Reset icon button.
 6. Expect no **+1** and no **−1** button.
 7. Expect the round display to show `2`.
+
+**M19. Tap guard at the end of AMRAP**
+1. Tap **AMRAP**.
+2. Set Time to 0:10.
+3. Tap **Start**, then **Start** on the timer screen.
+4. After prep, tap **+1** two times.
+5. Keep tapping **+1** quickly until the end beep, and for 1 s after it.
+6. Expect Finished with `0:00`.
+7. Expect the round display to keep the count from before the end beep. It must not go to `0`.
+8. Wait 2 s.
+9. Tap **Reset**.
+10. Expect Idle with `0:10` and the count `0`.

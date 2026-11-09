@@ -565,7 +565,7 @@ function openTimer(mode, settings) {
   timerScreen.style.setProperty('--clock-aspect', String(clockDisplay.width / DIGIT_H));
   timerScreen.style.setProperty('--side-aspect', String(sideAspect || 1));
 
-  state = STATE.IDLE;
+  setState(STATE.IDLE);
   bankedMs = 0;
   roundCount = 0;
   hidePause();
@@ -650,6 +650,40 @@ function showControls() {
   timerScreen.dataset.state = state;
 }
 
+// The tap guard of section 9. A new button can show where the finger just
+// tapped, so a late tap or a double tap could hit it.
+// - After each change of state, every control except Pause ignores taps for
+//   0.5 s.
+// - After the change to Finished, every control ignores taps for 1.5 s.
+// - A tap on the display is not guarded.
+// setState() starts the guard.
+const TAP_GUARD_MS = 500;
+const FINISHED_TAP_GUARD_MS = 1500;
+let guardUntil = 0;
+let guardCoversPause = false;
+
+function startTapGuard(toFinished) {
+  guardUntil = performance.now() + (toFinished ? FINISHED_TAP_GUARD_MS : TAP_GUARD_MS);
+  guardCoversPause = toFinished;
+}
+
+function isGuarded(button) {
+  if (performance.now() >= guardUntil) {
+    return false;
+  }
+  return button !== pauseButton || guardCoversPause;
+}
+
+// A guarded tap does nothing. The controls are outside the display, so the tap
+// does not show Pause either.
+function onControl(button, action) {
+  button.addEventListener('click', () => {
+    if (!isGuarded(button)) {
+      action();
+    }
+  });
+}
+
 // Pause is hidden in Prep and Running. A tap on the display shows it for 3 s,
 // and each new tap starts the 3 s again. The tap only shows Pause. It never
 // pauses the timer.
@@ -693,6 +727,14 @@ function isCounting() {
   return state === STATE.PREP || state === STATE.RUNNING;
 }
 
+// Every change of state goes through here, so each one starts the tap guard.
+function setState(next) {
+  if (next !== state) {
+    startTapGuard(next === STATE.FINISHED);
+  }
+  state = next;
+}
+
 function beginLeg() {
   legStartPerf = performance.now();
 }
@@ -711,7 +753,7 @@ function tick() {
   if (view.type === TYPE.FINISHED) {
     finish();
   } else {
-    state = view.type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
+    setState(view.type === TYPE.PREP ? STATE.PREP : STATE.RUNNING);
   }
   draw(view);
   if (state !== stateBefore) {
@@ -785,7 +827,7 @@ function onStart() {
   audio.enable();
   bankedMs = 0;
   roundCount = 0;
-  state = STATE.PREP;
+  setState(STATE.PREP);
   audio.arm(workout.beeps);
   requestWakeLock();
   tick();
@@ -803,7 +845,7 @@ function onPause() {
     return;
   }
   bankedMs = elapsedMs;
-  state = STATE.PAUSED;
+  setState(STATE.PAUSED);
   hidePause();
   stopFrames();
   audio.disarm();
@@ -817,7 +859,7 @@ function onResume() {
   }
   beginLeg();
   audio.enable();
-  state = getState(bankedMs, workout.segments).type === TYPE.PREP ? STATE.PREP : STATE.RUNNING;
+  setState(getState(bankedMs, workout.segments).type === TYPE.PREP ? STATE.PREP : STATE.RUNNING);
   audio.arm(workout.beeps);
   requestWakeLock();
   tick();
@@ -827,7 +869,7 @@ function onResume() {
 
 // Stops the workout and goes to Idle.
 function stopWorkout() {
-  state = STATE.IDLE;
+  setState(STATE.IDLE);
   bankedMs = 0;
   roundCount = 0;
   hidePause();
@@ -859,7 +901,7 @@ function onDone() {
   }
   audio.enable();
   audio.playEndNow();
-  state = STATE.FINISHED;
+  setState(STATE.FINISHED);
   bankedMs = elapsedMs;
   hidePause();
   stopFrames();
@@ -868,18 +910,24 @@ function onDone() {
   showControls();
 }
 
-// +1 and -1 show only in Running, as section 9 says.
+// +1 and -1 show only in Running, as section 9 says. The clock is read first,
+// so a tap that comes after the end of the workout, before the next frame, does
+// not change the final count.
 function onRoundCount(delta) {
   if (workout.mode !== MODE.AMRAP || state !== STATE.RUNNING) {
     return;
   }
+  const elapsedMs = tick();
+  if (state !== STATE.RUNNING) {
+    return;
+  }
   roundCount = adjustRoundCount(roundCount, delta);
-  tick();
+  draw(getState(elapsedMs, workout.segments));
 }
 
 // The end beep is already on the audio clock, so it keeps sounding here.
 function finish() {
-  state = STATE.FINISHED;
+  setState(STATE.FINISHED);
   bankedMs = workout.totalMs;
   hidePause();
   audio.finish();
@@ -902,15 +950,15 @@ function onReturnToPage() {
 
 /* ---------- Events ---------- */
 
-startButton.addEventListener('click', onStart);
-pauseButton.addEventListener('click', onPause);
-resumeButton.addEventListener('click', onResume);
-resetButton.addEventListener('click', onReset);
-resetIconButton.addEventListener('click', onReset);
-doneButton.addEventListener('click', onDone);
-menuButton.addEventListener('click', onMenu);
-plusButton.addEventListener('click', () => onRoundCount(1));
-minusButton.addEventListener('click', () => onRoundCount(-1));
+onControl(startButton, onStart);
+onControl(pauseButton, onPause);
+onControl(resumeButton, onResume);
+onControl(resetButton, onReset);
+onControl(resetIconButton, onReset);
+onControl(doneButton, onDone);
+onControl(menuButton, onMenu);
+onControl(plusButton, () => onRoundCount(1));
+onControl(minusButton, () => onRoundCount(-1));
 displayEl.addEventListener('click', onDisplayTap);
 
 document.addEventListener('visibilitychange', () => {

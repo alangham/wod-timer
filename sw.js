@@ -1,6 +1,6 @@
 // Change VERSION on each release. The new cache name makes every phone load the
 // new files, and the activate step deletes the old cache.
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 const CACHE_PREFIX = 'wod-timer-';
 const CACHE_NAME = `${CACHE_PREFIX}${VERSION}`;
 
