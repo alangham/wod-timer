@@ -560,4 +560,4 @@ Each test starts from a fresh page load of the GitHub Pages URL, with the phone 
 7. Expect the round display to keep the count from before the end beep. It must not go to `0`.
 8. Wait 2 s.
 9. Tap **Reset**.
-10. Expect Idle with `0:10` and the count `0`.
+10. Expect Idle with `0:10` and a blank round display.
